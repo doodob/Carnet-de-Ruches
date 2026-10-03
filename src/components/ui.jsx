@@ -79,6 +79,28 @@ export function Chips({ options, value, onChange }) {
   );
 }
 
+// Propositions à un appui sous un champ libre : un choix remplit le champ.
+export function Picks({ options, value, onChange }) {
+  return (
+    <div className="chips">
+      {options.map((option) => {
+        const on = value === option;
+        return (
+          <button
+            key={option}
+            type="button"
+            className={`chip${on ? " is-on" : ""}`}
+            aria-pressed={on}
+            onClick={() => onChange(on ? "" : option)}
+          >
+            {option}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Stepper({ value, onChange, min = 0, max = 99, label }) {
   const current = value ?? null;
   const dec = () => onChange(current === null ? min : Math.max(min, current - 1));
@@ -108,6 +130,21 @@ export function QueenDot({ color, size = 18 }) {
       role="img"
       aria-label={`Reine marquée ${color}`}
     />
+  );
+}
+
+// Les alertes portent un signe et un texte : jamais la couleur seule.
+export function AlertList({ alerts }) {
+  if (!alerts.length) return null;
+  return (
+    <ul className="alerts">
+      {alerts.map((a) => (
+        <li key={a.key}>
+          <span className="alert-sign" aria-hidden="true">!</span>
+          {a.text}
+        </li>
+      ))}
+    </ul>
   );
 }
 

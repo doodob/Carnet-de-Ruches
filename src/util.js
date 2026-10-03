@@ -55,6 +55,15 @@ export const ACTIONS = [
   "Récolte",
 ];
 
+// Propositions rapides ; la saisie reste libre.
+export const TREATMENT_PRODUCTS = ["Apivar", "Apiguard", "Thymovar", "Api-Bioxal", "Oxybee", "MAQS", "VarroMed"];
+
+export const TREATMENT_REASONS = ["Varroa", "Nosémose", "Loque", "Autre"];
+
+export const FEED_TYPES = ["Sirop 50/50", "Sirop lourd", "Candi", "Pâte protéinée"];
+
+export const HONEY_TYPES = ["Toutes fleurs", "Printemps", "Été", "Acacia", "Châtaignier", "Lavande", "Tilleul", "Miellat"];
+
 export const TEMPER_LABELS = ["", "Très calme", "Calme", "Normale", "Nerveuse", "Agressive"];
 
 export function toNumberOrNull(value) {
@@ -68,6 +77,33 @@ const pad = (n) => String(n).padStart(2, "0");
 export function toLocalInputValue(date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
+
+export function todayValue(date = new Date()) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+const DAY_MS = 86400000;
+
+// Écart en jours entre aujourd'hui et une date AAAA-MM-JJ (positif dans le futur).
+export function daysFromToday(value, now = new Date()) {
+  return Math.round((new Date(`${value}T12:00:00`) - new Date(`${todayValue(now)}T12:00:00`)) / DAY_MS);
+}
+
+export function addDays(value, days) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return todayValue(date);
+}
+
+export function relativeDay(value) {
+  const days = daysFromToday(value);
+  if (days === 0) return "aujourd'hui";
+  if (days === 1) return "demain";
+  return days > 0 ? `dans ${days} j` : `en retard de ${-days} j`;
+}
+
+export const formatKg = (value) =>
+  `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(value)} kg`;
 
 export function formatDateTime(iso) {
   return new Intl.DateTimeFormat("fr-FR", {

@@ -21,6 +21,16 @@
   --frame-brood: #6e4a2c;
   --frame-honey: #f2b51c;
   --frame-pollen: #b65a12;
+  --frame-partition: #46525c;
+
+  --hive-body: #e0a24a;
+  --hive-super: #edc47c;
+  --hive-roof: #5f6f66;
+  --hive-stand: #6b4a2e;
+
+  --series-brood: #a0602c;
+  --series-honey: #d09a00;
+  --series-bees: #3a78b5;
 
   --radius: 10px;
   --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -40,6 +50,14 @@
     --danger: #ef8a7e;
     --focus: #7fb0ff;
     --frame-drawn: #6f6a4c;
+    --frame-partition: #8a99a6;
+    --hive-body: #b47c33;
+    --hive-super: #c99d55;
+    --hive-roof: #7d8e84;
+    --hive-stand: #8b6a4a;
+    --series-brood: #954346;
+    --series-honey: #bd871c;
+    --series-bees: #4e90d2;
   }
 }
 
@@ -98,6 +116,18 @@ a {
   color: var(--muted);
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ----- Structure ---------------------------------------------------------- */
 
 .page {
@@ -107,7 +137,14 @@ a {
 }
 
 .page--narrow {
+  max-width: 30rem;
   padding-top: 18vh;
+}
+
+/* Formulaires : une colonne centrée, même quand la page s'élargit. */
+.narrow {
+  max-width: 48rem;
+  margin: 0 auto;
 }
 
 .page-head {
@@ -168,11 +205,13 @@ fieldset.section legend {
 
 .tabbar {
   position: fixed;
+  z-index: 10;
   left: 0;
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   background: var(--field);
   border-top: 2px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
@@ -192,6 +231,10 @@ fieldset.section legend {
 .tab.is-on {
   color: var(--ink);
   border-top-color: var(--honey);
+}
+
+.brand {
+  display: none;
 }
 
 /* ----- Boutons ------------------------------------------------------------ */
@@ -442,20 +485,6 @@ textarea {
   font-size: 0.98rem;
 }
 
-.row-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.2rem;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-.row-when {
-  color: var(--muted);
-  font-size: 0.95rem;
-}
-
 .row-actions {
   display: flex;
 }
@@ -482,6 +511,123 @@ textarea {
   flex-shrink: 0;
   border-radius: 50%;
   border: 2px solid var(--ink);
+}
+
+/* ----- Ruches dessinées, rangées par rucher ------------------------------- */
+
+.apiary {
+  margin-top: 1.75rem;
+}
+
+.apiary h2 {
+  margin-bottom: 0.5rem;
+}
+
+.apiary-count {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+/* Les ruches posées côte à côte, le sol en dessous. */
+.apiary-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.25rem, 1fr));
+  gap: 1rem 0.5rem;
+  margin: 0;
+  padding: 0 0 0.75rem;
+  list-style: none;
+  border-bottom: 3px solid var(--line);
+}
+
+.hive-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  height: 100%;
+  padding: 0.5rem 0.25rem;
+  border-radius: var(--radius);
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+}
+
+.hive-tile:hover {
+  background: var(--field);
+}
+
+.hive-icon {
+  display: block;
+  width: 100%;
+  max-width: 88px;
+  height: auto;
+  margin-bottom: 0.3rem;
+}
+
+.hive-icon rect,
+.hive-icon polygon {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.hive-icon .hive-ink {
+  fill: var(--ink);
+  stroke: none;
+}
+
+.hive-body {
+  fill: var(--hive-body);
+}
+
+.hive-super {
+  fill: var(--hive-super);
+}
+
+.hive-roof {
+  fill: var(--hive-roof);
+}
+
+.hive-stand {
+  fill: var(--hive-stand);
+}
+
+.hive-queen {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.hive-extra {
+  fill: var(--ink);
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* Ruche morte, fusionnée ou vendue : voilée. */
+.is-veiled .hive-icon {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.hive-name {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.hive-when {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.hive-tile .tag {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
 }
 
 /* ----- Détail d'une ruche ------------------------------------------------- */
@@ -554,6 +700,503 @@ textarea {
 .visit-actions {
   margin: 0.6rem 0 0;
   font-weight: 700;
+}
+
+/* ----- Traitements, nourrissements, récoltes ----------------------------- */
+
+.picked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.records {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.record {
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.record-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+}
+
+.record-tools {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.record-sub {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.98rem;
+}
+
+.total {
+  margin: 0 0 0.5rem;
+}
+
+.tag--on {
+  border-color: var(--honey);
+  background: var(--honey);
+  color: var(--honey-ink);
+}
+
+/* ----- Alertes et prochaine visite --------------------------------------- */
+
+.tag--alert {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.alerts,
+.board-alerts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alerts {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 0.9rem;
+  border-left: 4px solid var(--danger);
+  background: var(--field);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.alerts li,
+.board-alerts li {
+  display: flex;
+  gap: 0.55rem;
+  align-items: baseline;
+}
+
+.alert-sign {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: var(--danger);
+  color: var(--field);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.next-visit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-top: 1rem;
+}
+
+/* ----- Graphique de développement ---------------------------------------- */
+
+.chart {
+  margin: 0;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.95rem;
+}
+
+.chart-legend li,
+.chart-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.line-key {
+  display: inline-block;
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.series-brood { color: var(--series-brood); }
+.series-honey { color: var(--series-honey); }
+.series-bees { color: var(--series-bees); }
+
+.chart-box {
+  position: relative;
+  padding: 0.5rem 0;
+  border-radius: var(--radius);
+  background: var(--field);
+  touch-action: pan-y;
+}
+
+.chart-box svg {
+  display: block;
+}
+
+.chart-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart-tick {
+  fill: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-crosshair {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.chart-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-dot {
+  fill: currentColor;
+  stroke: var(--field);
+  stroke-width: 2;
+}
+
+.chart-tip {
+  position: absolute;
+  top: 0.5rem;
+  min-width: 9rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--ground);
+  color: var(--ink);
+  font-size: 0.92rem;
+  pointer-events: none;
+}
+
+.chart-tip-date {
+  margin-bottom: 0.25rem;
+  color: var(--muted);
+}
+
+.chart-table,
+.filters {
+  margin-top: 0.75rem;
+}
+
+.chart-table summary,
+.filters summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--forest);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chart-table table,
+.compare-table,
+.season,
+.board {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-table th,
+.chart-table td,
+.compare-table th,
+.compare-table td,
+.season th,
+.season td,
+.board th,
+.board td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.chart-table thead th,
+.compare-table thead th,
+.season thead th,
+.board thead th {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ----- Historique : filtres, comparaison, frise --------------------------- */
+
+.filters .stack {
+  margin-top: 0.5rem;
+}
+
+.compare {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 2px solid var(--focus);
+  border-radius: var(--radius);
+  background: var(--field);
+}
+
+.compare-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.compare h3 {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+}
+
+.compare-label {
+  margin: 0.75rem 0 0.3rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.compare-table {
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.compare-table th,
+.compare-table td {
+  padding-inline: 0.3rem;
+}
+
+.compare-table th[scope="row"] {
+  font-weight: 400;
+}
+
+.compare-hint {
+  margin: 0.75rem 0;
+  font-weight: 700;
+}
+
+.frame.is-changed {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.visit.is-selected {
+  box-shadow: inset 4px 0 0 var(--focus);
+  padding-left: 0.9rem;
+}
+
+.event {
+  display: flex;
+  flex-direction: column;
+  padding: 0.7rem 0 0.7rem 0.9rem;
+  border-top: 1px solid var(--line);
+  box-shadow: inset 4px 0 0 var(--line);
+}
+
+.event--treatment { box-shadow: inset 4px 0 0 var(--danger); }
+.event--feeding { box-shadow: inset 4px 0 0 var(--forest); }
+.event--harvest { box-shadow: inset 4px 0 0 var(--honey); }
+.event--queen { box-shadow: inset 4px 0 0 var(--ink); }
+
+.event-date {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* ----- Tableau de bord ---------------------------------------------------- */
+
+.lead {
+  margin: 0.5rem 0 1.25rem;
+  font-size: 1.15rem;
+}
+
+.board th[scope="row"] a {
+  font-family: var(--font-head);
+  font-size: 1.15rem;
+  font-weight: 650;
+  margin-right: 0.4rem;
+}
+
+.board-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.board tr.has-alerts th[scope="row"] {
+  box-shadow: inset 4px 0 0 var(--danger);
+  padding-left: 0.8rem;
+}
+
+.board th[scope="row"] {
+  min-width: 9rem;
+}
+
+.board td:not(.board-alerts-cell) {
+  white-space: nowrap;
+}
+
+/* Sur téléphone, chaque ruche devient une carte. */
+@media (max-width: 899px) {
+  .board thead {
+    display: none;
+  }
+
+  .board,
+  .board tbody,
+  .board tr,
+  .board th,
+  .board td {
+    display: block;
+  }
+
+  .board tr {
+    padding: 0.5rem 0;
+    border-top: 2px solid var(--line);
+  }
+
+  .board th,
+  .board td {
+    border: 0;
+    padding: 0.2rem 0;
+  }
+
+  .board td {
+    display: grid;
+    grid-template-columns: 9rem 1fr;
+    gap: 0.5rem;
+  }
+
+  .board td::before {
+    content: attr(data-label);
+    color: var(--muted);
+  }
+
+  .board td:not(.board-alerts-cell) {
+    white-space: normal;
+  }
+
+  /* Les alertes prennent toute la largeur de la carte. */
+  .board td.board-alerts-cell {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .board tr.has-alerts th[scope="row"] {
+    padding-left: 0.8rem;
+  }
+}
+
+/* ----- Bilan de saison ---------------------------------------------------- */
+
+.year-pick select {
+  min-width: 7rem;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+}
+
+.tile {
+  padding: 0.8rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--field);
+}
+
+.tile dt {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.tile dd {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-head);
+  font-size: 1.7rem;
+  font-weight: 700;
+}
+
+.tile-sub {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.season .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.season tfoot th,
+.season tfoot td {
+  font-weight: 700;
+  border-bottom: 0;
+}
+
+.season .tag {
+  margin-left: 0.4rem;
+}
+
+@media print {
+  .tabbar,
+  .no-print,
+  .back {
+    display: none !important;
+  }
+
+  .shell {
+    display: block;
+  }
+
+  body {
+    background: #ffffff;
+    color: #000000;
+  }
+
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .tile,
+  .chart-box {
+    background: none;
+    border: 1px solid #999999;
+  }
 }
 
 /* ----- Cadres : l'élément central de la visite ---------------------------- */
@@ -637,6 +1280,19 @@ span.frame {
   color: #ffffff;
 }
 
+/* Une planche, pas un cadre : plus fine que les autres. */
+.frame--partition {
+  flex-grow: 0.5;
+  background: var(--frame-partition);
+  color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .frame--partition {
+    color: #131a15;
+  }
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -664,6 +1320,83 @@ span.frame {
 @media (min-width: 720px) {
   .frame {
     height: 120px;
+  }
+}
+
+/* ----- Ordinateur : menu latéral, page plus large ------------------------- */
+
+@media (min-width: 900px) {
+  .shell {
+    display: grid;
+    grid-template-columns: 14rem minmax(0, 1fr);
+    min-height: 100vh;
+  }
+
+  .tabbar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 1.5rem 0.75rem;
+    border-top: 0;
+    border-right: 2px solid var(--line);
+  }
+
+  .brand {
+    display: block;
+    padding: 0 0.9rem 1.25rem;
+    font-family: var(--font-head);
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .tab {
+    place-items: center start;
+    min-height: 52px;
+    margin-top: 0;
+    padding: 0 0.9rem;
+    border-top: 0;
+    border-left: 4px solid transparent;
+    border-radius: 0 var(--radius) var(--radius) 0;
+  }
+
+  .tab.is-on {
+    border-left-color: var(--honey);
+    background: var(--ground);
+  }
+
+  .page {
+    width: 100%;
+    max-width: 76rem;
+    padding: 2.25rem 2.5rem 3rem;
+  }
+
+  .page--narrow {
+    max-width: 30rem;
+    padding-top: 18vh;
+  }
+
+  .apiary-row {
+    grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  }
+
+  .hive-icon {
+    max-width: 104px;
+  }
+
+  /* Fiche ruche : infos, reine et registres à gauche ; visites à droite. */
+  .detail-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    gap: 3.5rem;
+    align-items: start;
+  }
+
+  .detail-side > .section:first-child {
+    margin-top: 0;
   }
 }
 

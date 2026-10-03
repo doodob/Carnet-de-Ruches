@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api.js";
-import FrameRow from "../components/FrameRow.jsx";
-import { ErrorNote, Field, Loading, QueenDot } from "../components/ui.jsx";
+import { hiveAlerts } from "../alerts.js";
+import DevelopmentChart, { chartVisits } from "../components/DevelopmentChart.jsx";
+import { Feedings, Harvests, Treatments } from "../components/HiveRecords.jsx";
+import NextVisit from "../components/NextVisit.jsx";
+import Timeline from "../components/Timeline.jsx";
+import { AlertList, ErrorNote, Field, Loading, QueenDot } from "../components/ui.jsx";
 import {
-  MARKINGS, STATUS_LABELS, TEMPER_LABELS, formatCoords, formatDateTime, formatDay, mapUrl, markingForYear,
-  toNumberOrNull,
+  MARKINGS, STATUS_LABELS, formatCoords, formatDay, mapUrl, markingForYear, toNumberOrNull,
 } from "../util.js";
-
-function yesNo(value) {
-  if (value === true) return "Oui";
-  if (value === false) return "Non";
-  return "–";
-}
 
 function QueenForm({ hiveId, onDone, onCancel }) {
   const [q, setQ] = useState({ birth_year: "", strain: "", origin: "", marking_color: "", introduced_on: "" });
@@ -106,6 +103,7 @@ export default function HiveDetail() {
   const { hive, queens } = data;
   const currentQueen = queens.find((q) => !q.replaced_on);
   const pastQueens = queens.filter((q) => q.replaced_on);
+  const alerts = hiveAlerts({ ...hive, recent: inspections.slice(0, 2) });
 
   return (
     <>
@@ -122,113 +120,107 @@ export default function HiveDetail() {
       </header>
 
       <ErrorNote message={error} />
+      <AlertList alerts={alerts} />
 
-      <dl className="facts">
-        {hive.apiary_name && (
-          <div>
-            <dt>Rucher</dt>
-            <dd>
-              {hive.apiary_name}
-              {hive.latitude != null && hive.longitude != null && (
-                <>
-                  <br />
-                  <a href={mapUrl(hive.latitude, hive.longitude)} target="_blank" rel="noreferrer">
-                    {formatCoords(hive.latitude, hive.longitude)}
-                  </a>
-                </>
-              )}
-            </dd>
-          </div>
-        )}
-        {hive.installed_on && (
-          <div><dt>Mise en place</dt><dd>{formatDay(hive.installed_on)}</dd></div>
-        )}
-        {hive.origin && <div><dt>Origine</dt><dd>{hive.origin}</dd></div>}
-      </dl>
-      {hive.notes && <p className="notes">{hive.notes}</p>}
-
-      {hive.status === "active" && (
-        <Link to={`/ruches/${hive.id}/visite`} className="btn btn--primary btn--wide">Nouvelle visite</Link>
-      )}
-
-      <section className="section">
-        <h2>Reine</h2>
-        {currentQueen ? (
-          <p className="queen-line">
-            <QueenDot color={currentQueen.marking_color} size={22} />
-            <span>
-              {currentQueen.birth_year ? `Née en ${currentQueen.birth_year}` : "Année inconnue"}
-              {currentQueen.marking_color ? `, marquée ${currentQueen.marking_color}` : ""}
-              {currentQueen.strain ? `, souche ${currentQueen.strain}` : ""}
-              {currentQueen.introduced_on ? `, en place depuis le ${formatDay(currentQueen.introduced_on)}` : ""}
-            </span>
-          </p>
-        ) : (
-          <p className="muted">Aucune reine enregistrée.</p>
-        )}
-        {changingQueen ? (
-          <QueenForm
-            hiveId={hive.id}
-            onCancel={() => setChangingQueen(false)}
-            onDone={() => {
-              setChangingQueen(false);
-              load();
-            }}
-          />
-        ) : (
-          <button className="btn btn--ghost btn--small" onClick={() => setChangingQueen(true)}>
-            {currentQueen ? "Changer de reine" : "Ajouter une reine"}
-          </button>
-        )}
-        {pastQueens.length > 0 && (
-          <details className="past">
-            <summary>Reines précédentes ({pastQueens.length})</summary>
-            <ul className="plain">
-              {pastQueens.map((q) => (
-                <li key={q.id}>
-                  {q.birth_year ? `Née en ${q.birth_year}` : "Année inconnue"}
-                  {q.marking_color ? `, ${q.marking_color}` : ""}
-                  {q.replaced_on ? `, remplacée le ${formatDay(q.replaced_on)}` : ""}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </section>
-
-      <section className="section">
-        <h2>Visites</h2>
-        {inspections.length === 0 && (
-          <p className="muted">Aucune visite enregistrée. La première apparaîtra ici.</p>
-        )}
-        <ul className="history">
-          {inspections.map((v) => (
-            <li key={v.id} className="visit">
-              <div className="visit-head">
-                <strong>{formatDateTime(v.inspected_at)}</strong>
-                <button className="link-btn" onClick={() => removeInspection(v.id)}>Supprimer</button>
+      <div className="detail-cols">
+        <div className="detail-main">
+          <dl className="facts">
+            {hive.apiary_name && (
+              <div>
+                <dt>Rucher</dt>
+                <dd>
+                  {hive.apiary_name}
+                  {hive.latitude != null && hive.longitude != null && (
+                    <>
+                      <br />
+                      <a href={mapUrl(hive.latitude, hive.longitude)} target="_blank" rel="noreferrer">
+                        {formatCoords(hive.latitude, hive.longitude)}
+                      </a>
+                    </>
+                  )}
+                </dd>
               </div>
-              {v.frame_layout && <FrameRow frames={v.frame_layout} compact />}
-              <dl className="visit-facts">
-                <div><dt>Reine vue</dt><dd>{yesNo(v.queen_seen)}</dd></div>
-                <div><dt>Œufs</dt><dd>{yesNo(v.eggs_seen)}</dd></div>
-                {v.queen_cells === true && <div><dt>Cellules royales</dt><dd>Oui</dd></div>}
-                {v.brood_frames != null && <div><dt>Couvain</dt><dd>{v.brood_frames}</dd></div>}
-                {v.honey_frames != null && <div><dt>Miel</dt><dd>{v.honey_frames}</dd></div>}
-                {v.pollen_frames != null && <div><dt>Pollen</dt><dd>{v.pollen_frames}</dd></div>}
-                {v.bee_frames != null && <div><dt>Cadres d'abeilles</dt><dd>{v.bee_frames}</dd></div>}
-                {v.supers_count != null && <div><dt>Hausses</dt><dd>{v.supers_count}</dd></div>}
-                {v.temper != null && <div><dt>Comportement</dt><dd>{TEMPER_LABELS[v.temper]}</dd></div>}
-                {v.temperature_c != null && <div><dt>Température</dt><dd>{v.temperature_c} °C</dd></div>}
-                {v.wind && <div><dt>Vent</dt><dd>{v.wind}</dd></div>}
-                {v.sky && <div><dt>Ciel</dt><dd>{v.sky}</dd></div>}
-              </dl>
-              {v.actions?.length > 0 && <p className="visit-actions">{v.actions.join(", ")}</p>}
-              {v.notes && <p className="notes">{v.notes}</p>}
-            </li>
-          ))}
-        </ul>
-      </section>
+            )}
+            {hive.installed_on && (
+              <div><dt>Mise en place</dt><dd>{formatDay(hive.installed_on)}</dd></div>
+            )}
+            {hive.origin && <div><dt>Origine</dt><dd>{hive.origin}</dd></div>}
+          </dl>
+          {hive.notes && <p className="notes">{hive.notes}</p>}
+
+          {hive.status === "active" && <NextVisit key={hive.next_visit_on ?? ""} hive={hive} onSaved={load} />}
+
+          {hive.status === "active" && (
+            <Link to={`/ruches/${hive.id}/visite`} className="btn btn--primary btn--wide">Nouvelle visite</Link>
+          )}
+
+          <section className="section">
+            <h2>Reine</h2>
+            {currentQueen ? (
+              <p className="queen-line">
+                <QueenDot color={currentQueen.marking_color} size={22} />
+                <span>
+                  {currentQueen.birth_year ? `Née en ${currentQueen.birth_year}` : "Année inconnue"}
+                  {currentQueen.marking_color ? `, marquée ${currentQueen.marking_color}` : ""}
+                  {currentQueen.strain ? `, souche ${currentQueen.strain}` : ""}
+                  {currentQueen.introduced_on ? `, en place depuis le ${formatDay(currentQueen.introduced_on)}` : ""}
+                </span>
+              </p>
+            ) : (
+              <p className="muted">Aucune reine enregistrée.</p>
+            )}
+            {changingQueen ? (
+              <QueenForm
+                hiveId={hive.id}
+                onCancel={() => setChangingQueen(false)}
+                onDone={() => {
+                  setChangingQueen(false);
+                  load();
+                }}
+              />
+            ) : (
+              <button className="btn btn--ghost btn--small" onClick={() => setChangingQueen(true)}>
+                {currentQueen ? "Changer de reine" : "Ajouter une reine"}
+              </button>
+            )}
+            {pastQueens.length > 0 && (
+              <details className="past">
+                <summary>Reines précédentes ({pastQueens.length})</summary>
+                <ul className="plain">
+                  {pastQueens.map((q) => (
+                    <li key={q.id}>
+                      {q.birth_year ? `Née en ${q.birth_year}` : "Année inconnue"}
+                      {q.marking_color ? `, ${q.marking_color}` : ""}
+                      {q.replaced_on ? `, remplacée le ${formatDay(q.replaced_on)}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </section>
+
+          <Treatments hiveId={hive.id} items={data.treatments} onChange={load} onError={setError} />
+          <Feedings hiveId={hive.id} items={data.feedings} onChange={load} onError={setError} />
+          <Harvests hiveId={hive.id} items={data.harvests} onChange={load} onError={setError} />
+        </div>
+
+        <div className="detail-side">
+          {chartVisits(inspections).length >= 2 && (
+            <section className="section">
+              <h2>Développement</h2>
+              <DevelopmentChart inspections={inspections} bodyFrames={hive.body_frames} />
+            </section>
+          )}
+          <Timeline
+            inspections={inspections}
+            treatments={data.treatments}
+            feedings={data.feedings}
+            harvests={data.harvests}
+            queens={queens}
+            onDeleteInspection={removeInspection}
+          />
+        </div>
+      </div>
     </>
   );
 }

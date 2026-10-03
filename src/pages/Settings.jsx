@@ -301,7 +301,7 @@ export default function Settings({ onLogout }) {
   };
 
   return (
-    <>
+    <div className="narrow">
       <h1>Réglages</h1>
       <ErrorNote message={error} />
       {(!apiaries || !models) && !error && <Loading />}
@@ -314,6 +314,6 @@ export default function Settings({ onLogout }) {
       <section className="section">
         <button className="btn btn--ghost" onClick={logout}>Se déconnecter</button>
       </section>
-    </>
+    </div>
   );
 }

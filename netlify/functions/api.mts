@@ -12,7 +12,8 @@ type Route = [method: string, pattern: string, handler: Handler];
 
 const COOKIE = "carnet_session";
 const SESSION_SECONDS = 60 * 60 * 24 * 30; // 30 jours
-const FRAME_STATES = ["empty", "drawn", "brood", "honey", "pollen"];
+// "partition" : partition isolante qui resserre le volume ; elle occupe la place d'un cadre.
+const FRAME_STATES = ["empty", "drawn", "brood", "honey", "pollen", "partition"];
 const HIVE_STATUSES = ["active", "dead", "merged", "sold"];
 
 class HttpError extends Error {
@@ -253,6 +254,42 @@ function parseInspection(b: Body) {
   };
 }
 
+// Dates simples AAAA-MM-JJ : la base refuse les dates impossibles.
+function day(v: unknown): string | null {
+  const s = text(v);
+  if (s === null) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new HttpError(400, "Une des dates est invalide.");
+  return s;
+}
+
+function parseTreatment(b: Body) {
+  const product = text(b.product);
+  const started_on = day(b.started_on);
+  const ended_on = day(b.ended_on);
+  if (!product) throw new HttpError(400, "Le produit est obligatoire.");
+  if (!started_on) throw new HttpError(400, "La date de début est obligatoire.");
+  if (ended_on && ended_on < started_on) throw new HttpError(400, "La fin du traitement ne peut pas précéder son début.");
+  return { product, dose: text(b.dose), reason: text(b.reason), started_on, ended_on, notes: text(b.notes) };
+}
+
+function parseFeeding(b: Body) {
+  const fed_on = day(b.fed_on);
+  const feed_type = text(b.feed_type);
+  const quantity_kg = num(b.quantity_kg);
+  if (!fed_on) throw new HttpError(400, "La date est obligatoire.");
+  if (!feed_type) throw new HttpError(400, "Le type de nourriture est obligatoire.");
+  if (quantity_kg !== null && quantity_kg <= 0) throw new HttpError(400, "La quantité doit être positive.");
+  return { fed_on, feed_type, quantity_kg };
+}
+
+function parseHarvest(b: Body) {
+  const harvested_on = day(b.harvested_on);
+  const quantity_kg = num(b.quantity_kg);
+  if (!harvested_on) throw new HttpError(400, "La date est obligatoire.");
+  if (quantity_kg === null || quantity_kg <= 0) throw new HttpError(400, "La quantité récoltée doit être positive.");
+  return { harvested_on, quantity_kg, honey_type: text(b.honey_type), notes: text(b.notes) };
+}
+
 // ----- Routes ---------------------------------------------------------------
 
 function buildRoutes(): Route[] {
@@ -346,10 +383,23 @@ function buildRoutes(): Route[] {
       "/hives",
       async ({ db }) =>
         json(await db.sql`
-          SELECT h.id, h.name, h.status, h.model_id, h.apiary_id,
+          SELECT h.id, h.name, h.status, h.model_id, h.apiary_id, h.next_visit_on::text AS next_visit_on,
                  m.name AS model_name, m.body_frames, m.super_frames,
                  a.name AS apiary_name,
+                 (SELECT coalesce(json_agg(v ORDER BY v.inspected_at DESC), '[]'::json) FROM (
+                    SELECT inspected_at, queen_seen, eggs_seen, queen_cells, brood_frames, honey_frames,
+                           bee_frames, supers_count, temper
+                    FROM inspections WHERE hive_id = h.id
+                    ORDER BY inspected_at DESC LIMIT 2
+                  ) v) AS recent,
                  (SELECT max(i.inspected_at) FROM inspections i WHERE i.hive_id = h.id) AS last_inspection,
+                 (SELECT i.supers_count FROM inspections i
+                  WHERE i.hive_id = h.id ORDER BY i.inspected_at DESC LIMIT 1) AS supers_count,
+                 EXISTS (
+                   SELECT 1 FROM treatments t
+                   WHERE t.hive_id = h.id AND t.started_on <= CURRENT_DATE
+                     AND (t.ended_on IS NULL OR t.ended_on >= CURRENT_DATE)
+                 ) AS treating,
                  (SELECT row_to_json(q) FROM (
                     SELECT birth_year, marking_color, strain FROM queens
                     WHERE hive_id = h.id AND replaced_on IS NULL
@@ -392,7 +442,7 @@ function buildRoutes(): Route[] {
         const id = requireId(params.id, "Ruche");
         const [hive] = await db.sql`
           SELECT h.id, h.name, h.status, h.model_id, h.apiary_id, h.origin, h.notes,
-                 h.installed_on::text AS installed_on,
+                 h.installed_on::text AS installed_on, h.next_visit_on::text AS next_visit_on,
                  m.name AS model_name, m.body_frames, m.super_frames,
                  a.name AS apiary_name, a.latitude, a.longitude
           FROM hives h
@@ -406,7 +456,23 @@ function buildRoutes(): Route[] {
           FROM queens
           WHERE hive_id = ${id}
           ORDER BY (replaced_on IS NULL) DESC, introduced_on DESC NULLS LAST, id DESC`;
-        return json({ hive, queens });
+        const treatments = await db.sql`
+          SELECT id, product, dose, reason, notes,
+                 started_on::text AS started_on, ended_on::text AS ended_on
+          FROM treatments
+          WHERE hive_id = ${id}
+          ORDER BY started_on DESC, id DESC`;
+        const feedings = await db.sql`
+          SELECT id, fed_on::text AS fed_on, feed_type, quantity_kg
+          FROM feedings
+          WHERE hive_id = ${id}
+          ORDER BY fed_on DESC, id DESC`;
+        const harvests = await db.sql`
+          SELECT id, harvested_on::text AS harvested_on, quantity_kg, honey_type, notes
+          FROM harvests
+          WHERE hive_id = ${id}
+          ORDER BY harvested_on DESC, id DESC`;
+        return json({ hive, queens, treatments, feedings, harvests });
       },
     ],
     [
@@ -432,6 +498,18 @@ function buildRoutes(): Route[] {
         const id = requireId(params.id, "Ruche");
         await db.sql`DELETE FROM hives WHERE id = ${id}`;
         return json({ ok: true });
+      },
+    ],
+
+    [
+      "PUT",
+      "/hives/:id/next-visit",
+      async ({ req, params, db }) => {
+        const id = requireId(params.id, "Ruche");
+        const next = day((await readBody(req)).next_visit_on);
+        const [row] = await db.sql`UPDATE hives SET next_visit_on = ${next} WHERE id = ${id} RETURNING id`;
+        if (!row) throw new HttpError(404, "Ruche introuvable.");
+        return json({ id });
       },
     ],
 
@@ -480,22 +558,167 @@ function buildRoutes(): Route[] {
       "/hives/:id/inspections",
       async ({ req, params, db }) => {
         const id = requireId(params.id, "Ruche");
-        const i = parseInspection(await readBody(req));
+        const b = await readBody(req);
+        const i = parseInspection(b);
+        const next = day(b.next_visit_on);
+        const inspectionId = await tx(db, async (query) => {
+          const [row] = await query(
+            `INSERT INTO inspections (
+               hive_id, inspected_at, temperature_c, wind, sky, queen_seen, eggs_seen, queen_cells,
+               brood_frames, bee_frames, honey_frames, pollen_frames, supers_count, temper,
+               actions, frame_layout, notes
+             ) VALUES (
+               $1, COALESCE($2::timestamptz, now()), $3, $4, $5, $6, $7, $8,
+               $9, $10, $11, $12, $13, $14, $15::jsonb, $16::jsonb, $17
+             )
+             RETURNING id, inspected_at`,
+            [
+              id, i.inspected_at, i.temperature_c, i.wind, i.sky, i.queen_seen, i.eggs_seen, i.queen_cells,
+              i.brood_frames, i.bee_frames, i.honey_frames, i.pollen_frames, i.supers_count, i.temper,
+              i.actions, i.frame_layout, i.notes,
+            ],
+          );
+          await query(
+            `UPDATE hives
+             SET next_visit_on = CASE
+               WHEN $2::date IS NOT NULL THEN $2::date
+               WHEN next_visit_on <= $3::timestamptz::date THEN NULL
+               ELSE next_visit_on
+             END
+             WHERE id = $1`,
+            [id, next, row.inspected_at],
+          );
+          return row.id as number;
+        });
+        return json({ id: inspectionId }, 201);
+      },
+    ],
+    // Traitements : un traitement sans date de fin est en cours.
+    [
+      "POST",
+      "/hives/:id/treatments",
+      async ({ req, params, db }) => {
+        const id = requireId(params.id, "Ruche");
+        const t = parseTreatment(await readBody(req));
         const [row] = await db.sql`
-          INSERT INTO inspections (
-            hive_id, inspected_at, temperature_c, wind, sky, queen_seen, eggs_seen, queen_cells,
-            brood_frames, bee_frames, honey_frames, pollen_frames, supers_count, temper,
-            actions, frame_layout, notes
-          ) VALUES (
-            ${id}, COALESCE(${i.inspected_at}::timestamptz, now()), ${i.temperature_c}, ${i.wind}, ${i.sky},
-            ${i.queen_seen}, ${i.eggs_seen}, ${i.queen_cells},
-            ${i.brood_frames}, ${i.bee_frames}, ${i.honey_frames}, ${i.pollen_frames}, ${i.supers_count}, ${i.temper},
-            ${i.actions}::jsonb, ${i.frame_layout}::jsonb, ${i.notes}
-          )
+          INSERT INTO treatments (hive_id, product, dose, reason, started_on, ended_on, notes)
+          VALUES (${id}, ${t.product}, ${t.dose}, ${t.reason}, ${t.started_on}, ${t.ended_on}, ${t.notes})
           RETURNING id`;
         return json({ id: row.id }, 201);
       },
     ],
+    [
+      "PUT",
+      "/treatments/:id/end",
+      async ({ req, params, db }) => {
+        const id = requireId(params.id, "Traitement");
+        const ended_on = day((await readBody(req)).ended_on);
+        if (!ended_on) throw new HttpError(400, "La date de fin est obligatoire.");
+        const [row] = await db.sql`SELECT started_on::text AS started_on FROM treatments WHERE id = ${id}`;
+        if (!row) throw new HttpError(404, "Traitement introuvable.");
+        if (ended_on < row.started_on) throw new HttpError(400, "La fin du traitement ne peut pas précéder son début.");
+        await db.sql`UPDATE treatments SET ended_on = ${ended_on} WHERE id = ${id}`;
+        return json({ id });
+      },
+    ],
+    [
+      "DELETE",
+      "/treatments/:id",
+      async ({ params, db }) => {
+        const id = requireId(params.id, "Traitement");
+        await db.sql`DELETE FROM treatments WHERE id = ${id}`;
+        return json({ ok: true });
+      },
+    ],
+
+    // Nourrissements
+    [
+      "POST",
+      "/hives/:id/feedings",
+      async ({ req, params, db }) => {
+        const id = requireId(params.id, "Ruche");
+        const f = parseFeeding(await readBody(req));
+        const [row] = await db.sql`
+          INSERT INTO feedings (hive_id, fed_on, feed_type, quantity_kg)
+          VALUES (${id}, ${f.fed_on}, ${f.feed_type}, ${f.quantity_kg})
+          RETURNING id`;
+        return json({ id: row.id }, 201);
+      },
+    ],
+    [
+      "DELETE",
+      "/feedings/:id",
+      async ({ params, db }) => {
+        const id = requireId(params.id, "Nourrissement");
+        await db.sql`DELETE FROM feedings WHERE id = ${id}`;
+        return json({ ok: true });
+      },
+    ],
+
+    // Récoltes
+    [
+      "POST",
+      "/hives/:id/harvests",
+      async ({ req, params, db }) => {
+        const id = requireId(params.id, "Ruche");
+        const h = parseHarvest(await readBody(req));
+        const [row] = await db.sql`
+          INSERT INTO harvests (hive_id, harvested_on, quantity_kg, honey_type, notes)
+          VALUES (${id}, ${h.harvested_on}, ${h.quantity_kg}, ${h.honey_type}, ${h.notes})
+          RETURNING id`;
+        return json({ id: row.id }, 201);
+      },
+    ],
+    [
+      "DELETE",
+      "/harvests/:id",
+      async ({ params, db }) => {
+        const id = requireId(params.id, "Récolte");
+        await db.sql`DELETE FROM harvests WHERE id = ${id}`;
+        return json({ ok: true });
+      },
+    ],
+
+    // Bilan d'une année : chiffres par ruche et registre des traitements.
+    [
+      "GET",
+      "/season/:year",
+      async ({ params, db }) => {
+        const year = Number(params.year);
+        if (!Number.isInteger(year) || year < 1900 || year > 2200) throw new HttpError(400, "Année invalide.");
+        const hives = await db.sql`
+          SELECT h.id, h.name, h.status, a.name AS apiary_name,
+                 (SELECT count(*)::int FROM inspections i
+                  WHERE i.hive_id = h.id AND extract(year FROM i.inspected_at) = ${year}) AS visits,
+                 (SELECT coalesce(sum(r.quantity_kg), 0) FROM harvests r
+                  WHERE r.hive_id = h.id AND extract(year FROM r.harvested_on) = ${year}) AS harvest_kg,
+                 (SELECT coalesce(sum(f.quantity_kg), 0) FROM feedings f
+                  WHERE f.hive_id = h.id AND extract(year FROM f.fed_on) = ${year}) AS feed_kg,
+                 (SELECT count(*)::int FROM feedings f
+                  WHERE f.hive_id = h.id AND extract(year FROM f.fed_on) = ${year}) AS feedings,
+                 (SELECT coalesce(json_agg(json_build_object(
+                           'product', t.product, 'dose', t.dose, 'reason', t.reason,
+                           'started_on', t.started_on, 'ended_on', t.ended_on, 'notes', t.notes
+                         ) ORDER BY t.started_on), '[]'::json)
+                  FROM treatments t
+                  WHERE t.hive_id = h.id
+                    AND extract(year FROM t.started_on) <= ${year}
+                    AND extract(year FROM coalesce(t.ended_on, CURRENT_DATE)) >= ${year}) AS treatments
+          FROM hives h
+          LEFT JOIN apiaries a ON a.id = h.apiary_id
+          ORDER BY a.name NULLS LAST, h.name`;
+        const years = await db.sql`
+          SELECT DISTINCT y::int AS year FROM (
+            SELECT extract(year FROM inspected_at) AS y FROM inspections
+            UNION SELECT extract(year FROM harvested_on) FROM harvests
+            UNION SELECT extract(year FROM fed_on) FROM feedings
+            UNION SELECT extract(year FROM started_on) FROM treatments
+          ) s
+          ORDER BY year DESC`;
+        return json({ year, years: years.map((r: any) => r.year), hives });
+      },
+    ],
+
     [
       "DELETE",
       "/inspections/:id",

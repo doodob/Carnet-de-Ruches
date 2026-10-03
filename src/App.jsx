@@ -7,6 +7,8 @@ import HiveForm from "./pages/HiveForm.jsx";
 import HiveDetail from "./pages/HiveDetail.jsx";
 import InspectionForm from "./pages/InspectionForm.jsx";
 import Settings from "./pages/Settings.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import Season from "./pages/Season.jsx";
 
 export default function App() {
   const [auth, setAuth] = useState("loading"); // loading | in | out | error
@@ -38,25 +40,36 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <main className="page">
-        <Routes>
-          <Route path="/" element={<Hives />} />
-          <Route path="/ruches/nouvelle" element={<HiveForm />} />
-          <Route path="/ruches/:id" element={<HiveDetail />} />
-          <Route path="/ruches/:id/modifier" element={<HiveForm />} />
-          <Route path="/ruches/:id/visite" element={<InspectionForm />} />
-          <Route path="/reglages" element={<Settings onLogout={() => setAuth("out")} />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
-      <nav className="tabbar" aria-label="Navigation principale">
-        <NavLink to="/" end className={({ isActive }) => `tab${isActive ? " is-on" : ""}`}>
-          Ruches
-        </NavLink>
-        <NavLink to="/reglages" className={({ isActive }) => `tab${isActive ? " is-on" : ""}`}>
-          Réglages
-        </NavLink>
-      </nav>
+      <div className="shell">
+        <nav className="tabbar" aria-label="Navigation principale">
+          <span className="brand">Carnet de rucher</span>
+          <NavLink to="/" end className={({ isActive }) => `tab${isActive ? " is-on" : ""}`}>
+            Ruches
+          </NavLink>
+          <NavLink to="/tableau" className={({ isActive }) => `tab${isActive ? " is-on" : ""}`}>
+            Tableau
+          </NavLink>
+          <NavLink to="/bilan" className={({ isActive }) => `tab${isActive ? " is-on" : ""}`}>
+            Bilan
+          </NavLink>
+          <NavLink to="/reglages" className={({ isActive }) => `tab${isActive ? " is-on" : ""}`}>
+            Réglages
+          </NavLink>
+        </nav>
+        <main className="page">
+          <Routes>
+            <Route path="/" element={<Hives />} />
+            <Route path="/ruches/nouvelle" element={<HiveForm />} />
+            <Route path="/ruches/:id" element={<HiveDetail />} />
+            <Route path="/ruches/:id/modifier" element={<HiveForm />} />
+            <Route path="/ruches/:id/visite" element={<InspectionForm />} />
+            <Route path="/tableau" element={<Dashboard />} />
+            <Route path="/bilan" element={<Season />} />
+            <Route path="/reglages" element={<Settings onLogout={() => setAuth("out")} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
     </BrowserRouter>
   );
 }

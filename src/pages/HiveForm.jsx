@@ -112,7 +112,7 @@ export default function HiveForm() {
   }
 
   return (
-    <>
+    <div className="narrow">
       <h1>{editing ? "Modifier la ruche" : "Nouvelle ruche"}</h1>
       <form onSubmit={submit} className="stack">
         <Field label="Nom ou numéro">
@@ -206,6 +206,6 @@ export default function HiveForm() {
           </button>
         )}
       </form>
-    </>
+    </div>
   );
 }
