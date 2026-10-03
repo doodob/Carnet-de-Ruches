@@ -1,0 +1,15 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# L'API passe par une seule fonction : netlify/functions/api.mts
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# Application mono-page : toutes les autres URLs renvoient index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
