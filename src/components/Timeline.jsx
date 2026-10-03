@@ -2,7 +2,9 @@
 // Filtres par type, par action, par période et dans les notes ; deux visites peuvent être comparées.
 
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import FrameRow from "./FrameRow.jsx";
+import { PhotoGallery } from "./Photos.jsx";
 import VisitCompare from "./VisitCompare.jsx";
 import { Chips, Segmented } from "./ui.jsx";
 import { ACTIONS, TEMPER_LABELS, formatDateTime, formatDay, formatKg } from "../util.js";
@@ -102,6 +104,7 @@ function VisitCard({ visit: v, selected, onToggleCompare, onDelete }) {
       <div className="visit-head">
         <strong>{formatDateTime(v.inspected_at)}</strong>
         <span className="record-tools">
+          <Link to={`/visites/${v.id}/modifier`} className="link-btn">Modifier</Link>
           <button type="button" className="link-btn" aria-pressed={selected} onClick={onToggleCompare}>
             {selected ? "Retirer de la comparaison" : "Comparer"}
           </button>
@@ -119,12 +122,13 @@ function VisitCard({ visit: v, selected, onToggleCompare, onDelete }) {
         {v.bee_frames != null && <div><dt>Cadres d'abeilles</dt><dd>{v.bee_frames}</dd></div>}
         {v.supers_count != null && <div><dt>Hausses</dt><dd>{v.supers_count}</dd></div>}
         {v.temper != null && <div><dt>Comportement</dt><dd>{TEMPER_LABELS[v.temper]}</dd></div>}
-        {v.temperature_c != null && <div><dt>Température</dt><dd>{v.temperature_c} °C</dd></div>}
+        {v.temperature_c != null && <div><dt>Température</dt><dd>{String(v.temperature_c).replace(".", ",")} °C</dd></div>}
         {v.wind && <div><dt>Vent</dt><dd>{v.wind}</dd></div>}
         {v.sky && <div><dt>Ciel</dt><dd>{v.sky}</dd></div>}
       </dl>
       {v.actions?.length > 0 && <p className="visit-actions">{v.actions.join(", ")}</p>}
       {v.notes && <p className="notes">{v.notes}</p>}
+      <PhotoGallery photos={v.photos} />
     </>
   );
 }

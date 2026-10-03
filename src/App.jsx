@@ -63,6 +63,7 @@ export default function App() {
             <Route path="/ruches/:id" element={<HiveDetail />} />
             <Route path="/ruches/:id/modifier" element={<HiveForm />} />
             <Route path="/ruches/:id/visite" element={<InspectionForm />} />
+            <Route path="/visites/:visitId/modifier" element={<InspectionForm />} />
             <Route path="/tableau" element={<Dashboard />} />
             <Route path="/bilan" element={<Season />} />
             <Route path="/reglages" element={<Settings onLogout={() => setAuth("out")} />} />

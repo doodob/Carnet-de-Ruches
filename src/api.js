@@ -1,10 +1,12 @@
 // Petit client pour l'API (/api/*). Le cookie de session est géré par le navigateur.
 
 async function request(method, path, body) {
+  // Un FormData (photos) part tel quel : le navigateur fixe lui-même l'en-tête multipart.
+  const isForm = body instanceof FormData;
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body !== undefined ? { "content-type": "application/json" } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    headers: body !== undefined && !isForm ? { "content-type": "application/json" } : undefined,
+    body: body === undefined || isForm ? body : JSON.stringify(body),
     credentials: "same-origin",
   });
 
@@ -31,4 +33,5 @@ export const api = {
   post: (path, body = {}) => request("POST", path, body),
   put: (path, body = {}) => request("PUT", path, body),
   del: (path) => request("DELETE", path),
+  upload: (path, form) => request("POST", path, form),
 };

@@ -1,3 +1,4 @@
+import { getStore } from "@netlify/blobs";
 import { getDatabase } from "@netlify/database";
 
 // ---------------------------------------------------------------------------
@@ -13,6 +14,9 @@ type Route = [method: string, pattern: string, handler: Handler];
 const COOKIE = "carnet_session";
 const SESSION_SECONDS = 60 * 60 * 24 * 30; // 30 jours
 // "partition" : partition isolante qui resserre le volume ; elle occupe la place d'un cadre.
+const PHOTO_MAX_BYTES = 5_000_000; // les photos sont réduites dans le navigateur avant l'envoi
+const THUMB_MAX_BYTES = 500_000;
+const PHOTOS_PER_VISIT = 20;
 const FRAME_STATES = ["empty", "drawn", "brood", "honey", "pollen", "partition"];
 const HIVE_STATUSES = ["active", "dead", "merged", "sold"];
 
@@ -88,6 +92,19 @@ function sessionCookie(value: string, maxAge: number, secure: boolean): string {
 
 function isSecure(req: Request): boolean {
   return new URL(req.url).protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
+}
+
+// ----- Photos (Netlify Blobs) ----------------------------------------------
+
+// Lecture forte : une photo envoyée doit s'afficher tout de suite.
+const photoStore = () => getStore({ name: "visit-photos", consistency: "strong" });
+
+const thumbKey = (key: string) => `${key}.thumb`;
+
+// Les blobs ne suivent pas les suppressions en cascade de la base : on les efface à part.
+async function deletePhotoBlobs(keys: string[]) {
+  const store = photoStore();
+  await Promise.allSettled(keys.flatMap((key) => [store.delete(key), store.delete(thumbKey(key))]));
 }
 
 // ----- Lecture et validation des valeurs ------------------------------------
@@ -496,7 +513,12 @@ function buildRoutes(): Route[] {
       "/hives/:id",
       async ({ params, db }) => {
         const id = requireId(params.id, "Ruche");
+        const photos = await db.sql`
+          SELECT p.blob_key FROM inspection_photos p
+          JOIN inspections i ON i.id = p.inspection_id
+          WHERE i.hive_id = ${id}`;
         await db.sql`DELETE FROM hives WHERE id = ${id}`;
+        await deletePhotoBlobs(photos.map((p: any) => p.blob_key));
         return json({ ok: true });
       },
     ],
@@ -546,7 +568,9 @@ function buildRoutes(): Route[] {
         return json(await db.sql`
           SELECT id, hive_id, inspected_at, temperature_c, wind, sky, queen_seen, eggs_seen, queen_cells,
                  brood_frames, bee_frames, honey_frames, pollen_frames, supers_count, temper,
-                 actions, frame_layout, notes
+                 actions, frame_layout, notes,
+                 (SELECT coalesce(json_agg(json_build_object('id', p.id) ORDER BY p.id), '[]'::json)
+                  FROM inspection_photos p WHERE p.inspection_id = inspections.id) AS photos
           FROM inspections
           WHERE hive_id = ${id}
           ORDER BY inspected_at DESC
@@ -719,12 +743,133 @@ function buildRoutes(): Route[] {
       },
     ],
 
+    // Une visite, pour la modifier.
+    [
+      "GET",
+      "/inspections/:id",
+      async ({ params, db }) => {
+        const id = requireId(params.id, "Visite");
+        const [row] = await db.sql`
+          SELECT id, hive_id, inspected_at, temperature_c, wind, sky, queen_seen, eggs_seen, queen_cells,
+                 brood_frames, bee_frames, honey_frames, pollen_frames, supers_count, temper,
+                 actions, frame_layout, notes,
+                 (SELECT coalesce(json_agg(json_build_object('id', p.id) ORDER BY p.id), '[]'::json)
+                  FROM inspection_photos p WHERE p.inspection_id = inspections.id) AS photos
+          FROM inspections
+          WHERE id = ${id}`;
+        if (!row) throw new HttpError(404, "Visite introuvable.");
+        return json(row);
+      },
+    ],
+    [
+      "PUT",
+      "/inspections/:id",
+      async ({ req, params, db }) => {
+        const id = requireId(params.id, "Visite");
+        const b = await readBody(req);
+        const i = parseInspection(b);
+        const next = day(b.next_visit_on);
+        await tx(db, async (query) => {
+          const [row] = await query(
+            `UPDATE inspections
+             SET inspected_at = COALESCE($2::timestamptz, inspected_at), temperature_c = $3, wind = $4, sky = $5,
+                 queen_seen = $6, eggs_seen = $7, queen_cells = $8, brood_frames = $9, bee_frames = $10,
+                 honey_frames = $11, pollen_frames = $12, supers_count = $13, temper = $14,
+                 actions = $15::jsonb, frame_layout = $16::jsonb, notes = $17
+             WHERE id = $1
+             RETURNING hive_id`,
+            [
+              id, i.inspected_at, i.temperature_c, i.wind, i.sky, i.queen_seen, i.eggs_seen, i.queen_cells,
+              i.brood_frames, i.bee_frames, i.honey_frames, i.pollen_frames, i.supers_count, i.temper,
+              i.actions, i.frame_layout, i.notes,
+            ],
+          );
+          if (!row) throw new HttpError(404, "Visite introuvable.");
+          if (next) await query(`UPDATE hives SET next_visit_on = $2 WHERE id = $1`, [row.hive_id, next]);
+        });
+        return json({ id });
+      },
+    ],
     [
       "DELETE",
       "/inspections/:id",
       async ({ params, db }) => {
         const id = requireId(params.id, "Visite");
+        const photos = await db.sql`SELECT blob_key FROM inspection_photos WHERE inspection_id = ${id}`;
         await db.sql`DELETE FROM inspections WHERE id = ${id}`;
+        await deletePhotoBlobs(photos.map((p: any) => p.blob_key));
+        return json({ ok: true });
+      },
+    ],
+
+    // Photos de visite : la photo (réduite à ~1600 px) et sa vignette arrivent ensemble.
+    [
+      "POST",
+      "/inspections/:id/photos",
+      async ({ req, params, db }) => {
+        const id = requireId(params.id, "Visite");
+        let form: FormData;
+        try {
+          form = await req.formData();
+        } catch {
+          throw new HttpError(400, "Envoi de photo illisible.");
+        }
+        const photo = form.get("photo");
+        const thumb = form.get("thumb");
+        if (!(photo instanceof Blob) || !(thumb instanceof Blob)) throw new HttpError(400, "Photo manquante.");
+        if (!photo.type.startsWith("image/") || !thumb.type.startsWith("image/")) {
+          throw new HttpError(400, "Ce fichier n'est pas une image.");
+        }
+        if (photo.size > PHOTO_MAX_BYTES || thumb.size > THUMB_MAX_BYTES) throw new HttpError(413, "Photo trop lourde.");
+
+        const [visit] = await db.sql`
+          SELECT (SELECT count(*)::int FROM inspection_photos WHERE inspection_id = ${id}) AS photos
+          FROM inspections WHERE id = ${id}`;
+        if (!visit) throw new HttpError(404, "Visite introuvable.");
+        if (visit.photos >= PHOTOS_PER_VISIT) throw new HttpError(400, `${PHOTOS_PER_VISIT} photos au plus par visite.`);
+
+        const key = `${id}/${crypto.randomUUID()}`;
+        const store = photoStore();
+        await store.set(key, await photo.arrayBuffer(), { metadata: { type: photo.type } });
+        await store.set(thumbKey(key), await thumb.arrayBuffer(), { metadata: { type: thumb.type } });
+        try {
+          const [row] = await db.sql`
+            INSERT INTO inspection_photos (inspection_id, blob_key) VALUES (${id}, ${key}) RETURNING id`;
+          return json({ id: row.id }, 201);
+        } catch (error) {
+          await deletePhotoBlobs([key]);
+          throw error;
+        }
+      },
+    ],
+    [
+      "GET",
+      "/photos/:id",
+      async ({ req, params, db }) => {
+        const id = requireId(params.id, "Photo");
+        const [row] = await db.sql`SELECT blob_key FROM inspection_photos WHERE id = ${id}`;
+        if (!row) throw new HttpError(404, "Photo introuvable.");
+        const wantThumb = new URL(req.url).searchParams.get("taille") === "vignette";
+        const blob = await photoStore().getWithMetadata(wantThumb ? thumbKey(row.blob_key) : row.blob_key, {
+          type: "arrayBuffer",
+        });
+        if (!blob) throw new HttpError(404, "Photo introuvable.");
+        return new Response(blob.data, {
+          headers: {
+            "content-type": typeof blob.metadata?.type === "string" ? blob.metadata.type : "image/jpeg",
+            // Une photo ne change jamais : son identifiant n'est pas réutilisé.
+            "cache-control": "private, max-age=31536000, immutable",
+          },
+        });
+      },
+    ],
+    [
+      "DELETE",
+      "/photos/:id",
+      async ({ params, db }) => {
+        const id = requireId(params.id, "Photo");
+        const [row] = await db.sql`DELETE FROM inspection_photos WHERE id = ${id} RETURNING blob_key`;
+        if (row) await deletePhotoBlobs([row.blob_key]);
         return json({ ok: true });
       },
     ],

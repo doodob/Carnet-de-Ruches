@@ -13,6 +13,10 @@ Tout est hébergé sur Netlify : l'interface (Vite + React), l'API (une Netlify 
 - Reines : année, marquage (couleur proposée selon l'année), souche, historique des changements.
 - Visites : cadres du corps (vide, bâti, couvain, miel, pollen, partition isolante), reine et œufs vus,
   cellules royales, hausses, comportement, actions, météo, notes. Les cadres sont repris de la visite précédente.
+- La date et l'heure de la visite se règlent en haut du formulaire, pour saisir une visite après coup.
+  Une visite enregistrée se modifie depuis l'historique (bouton « Modifier »).
+- Photos de visite : prises ou choisies depuis le téléphone, réduites dans le navigateur (environ 1600 px,
+  plus une vignette) puis rangées dans Netlify Blobs. Elles s'agrandissent d'un appui dans l'historique.
 - Météo automatique : si le rucher a des coordonnées GPS, la température, le vent et le ciel de l'heure
   de la visite sont préremplis depuis Open-Meteo (gratuit, sans clé). Ils restent modifiables.
 
@@ -59,7 +63,8 @@ Si l'API ne voit pas les variables du fichier `.env`, lance plutôt `npx netlify
    - `SESSION_SECRET` : une longue chaîne aléatoire (`openssl rand -hex 32`).
 4. Déploie. La base est créée et la migration appliquée pendant le déploiement.
 
-Sur le plan gratuit, les crédits mensuels sont partagés entre les déploiements, le trafic et la base.
+Sur le plan gratuit, les crédits mensuels sont partagés entre les déploiements, le trafic, la base et le
+stockage des photos (Netlify Blobs).
 Évite les déploiements inutiles et surveille *Team settings > Billing > Usage*.
 
 ## Structure
